@@ -1,0 +1,61 @@
+service: embarca-challenge
+
+provider:
+  name: aws
+  runtime: python3.10
+  region: sa-east-1
+
+functions:
+  lambda1:
+    handler: lambda_function_1.lambda_handler
+    environment:
+      BUCKET_NAME: ${self:custom.bucket_name}
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "s3:PutObject"
+          - "s3:GetObject"
+        Resource: "arn:aws:s3:::${self:custom.bucket_name}/*"
+      - Effect: "Allow"
+        Action:
+          - "lambda:InvokeFunction"
+        Resource: "*"
+
+  lambda2:
+    handler: lambda_function_2.lambda_handler
+    environment:
+      SECRET_NAME: ${self:custom.secret_name}
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "rds:Connect"
+        Resource: "*"
+
+stepFunctions:
+  stateMachines:
+    EmbarcaChallengeStateMachine:
+      definition:
+        StartAt: Lambda1
+        States:
+          Lambda1:
+            Type: Task
+            Resource: arn:aws:lambda:${self:provider.region}:#{AWS::AccountId}:function:${self:service}-${self:provider.stage}-lambda1
+            Next: Lambda2
+          Lambda2:
+            Type: Task
+            Resource: arn:aws:lambda:${self:provider.region}:#{AWS::AccountId}:function:${self:service}-${self:provider.stage}-lambda2
+            End: true
+      permissions:
+        - lambda1
+        - lambda2
+
+resources:
+  Resources:
+    CsvBucket:
+      Type: "AWS::S3::Bucket"
+      Properties:
+        BucketName: ${self:custom.bucket_name}
+
+custom:
+  bucket_name: herman-embarca-challenge
+  secret_name: "meu-segredo-rds"
